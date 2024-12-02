@@ -1,0 +1,87 @@
+﻿@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@inject IRoleService _roleService
+@attribute [Authorize]
+
+@page "/create-role"
+
+<h3>Create Role</h3>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+	<div class="alert alert-danger">
+		@errorMessage
+	</div>
+}
+<AuthorizeView Context="authContext" Policy="CanCreateRolePolicy">
+	<Authorized>
+		<div class="rz-p-0 rz-p-md-12">
+			<RadzenRow class="rz-text-align-center " Gap="1rem">
+				<RadzenColumn Size="6" Offset="3" class="rz-background-color-info-lighter rz-color-on-info-lighter rz-p-5">
+					<EditForm Model="role" OnSubmit="@OnSubmit">
+						<RadzenStack Orientation="Orientation.Vertical" Gap="1rem" class="rz-p-sm-12">
+							<DataAnnotationsValidator />
+
+							<RadzenFormField Text="Role Name" AllowFloatingLabel="true">
+								<ChildContent>
+									<RadzenTextBox Name="Name" @bind-Value=role.Name Placeholder="Role Name" />
+								</ChildContent>
+							</RadzenFormField>
+
+							<RadzenButton ButtonType="ButtonType.Submit" Text="Submit"></RadzenButton>
+							<RadzenLink Path="/roles" Text="Cancel" />
+						</RadzenStack>
+					</EditForm>
+				</RadzenColumn>
+			</RadzenRow>
+
+		</div>
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+@code {
+	private string userName;
+	private ApplicationUser user;
+
+	ApplicationRole role = new ApplicationRole();
+	private string? errorMessage;
+
+	protected async override Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Create", ResourceType.Role);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+	}
+
+	private async Task OnSubmit()
+	{
+		var result = await _roleService.CreateRoleAsync(role);
+
+		if (result.Item1)
+		{
+			errorMessage = null;
+			// _navigationManager.NavigateTo("/roles");
+			_navigationManager.NavigateTo($"/role-permissions/{role.Id}");
+		}
+		else if (!result.Item1)
+		{
+			errorMessage = result.Item2;
+			_navigationManager.NavigateTo("/create-role");
+		}
+	}
+}

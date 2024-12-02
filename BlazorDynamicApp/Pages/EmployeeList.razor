@@ -1,0 +1,136 @@
+﻿@inject NavigationManager _navigationManager
+@inject ApplicationDbContext _context
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@attribute [Authorize]
+@page "/employees"
+
+
+
+<PageTitle>Index</PageTitle>
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/employees" Text="Employees" />
+	</RadzenBreadCrumb>
+</div>
+
+<AuthorizeView Policy="CanCreateEmployeePolicy">
+	<RadzenButton Click=@(args => CreateEmployee()) Icon="add_circle" ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Text="Add"
+				  Shade="Shade.Light" />
+</AuthorizeView>
+
+<AuthorizeView Policy="CanViewEmployeePolicy">
+	<Authorized>
+		@if (employees == null)
+		{
+			<p><em>Loading...</em></p>
+		}
+		else
+		{
+			<RadzenText TextStyle="TextStyle.H6" TagName="TagName.H2" class="rz-my-6">Employees </RadzenText>
+			<RadzenDataGrid AllowVirtualization="true" @ref="grid" Data=@employees GridLines="DataGridGridLines.Both"
+							AllowFiltering="false" AllowPaging="true" AllowSorting="true" ColumnWidth="120px">
+				<Columns>
+					<RadzenDataGridColumn Property="Id" Title="Id">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Title="Employee Name" Property="Name">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Title="Department" Property="Department">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Title="Date Of Birth" Property="DateOfBirth" FormatString="{0:d}">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Title="Age" Property="Age">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Title="Phone Number" Property="PhoneNumber">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Width="160px" Title="Actions">
+						<Template Context="grid">
+							<RadzenButton ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat"
+										  Shade="Shade.Light" Icon="edit" class="rz-m-1" Click=@(() => EditEmployee(grid)) Text="Update" />
+
+							<RadzenButton ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat"
+										  Shade="Shade.Light" Icon="delete" class="rz-m-1" Click=@(() => Delete(grid)) Text="Delete" />
+
+						</Template>
+					</RadzenDataGridColumn>
+				</Columns>
+			</RadzenDataGrid>
+		}
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+
+@code
+{
+	RadzenDataGrid<Employee> grid;
+	private string userName;
+	private ApplicationUser user;
+	IEnumerable<Employee> employees;
+
+	protected override async Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "View", ResourceType.Employee);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+		employees = await _context.Employees.ToListAsync();
+	}
+
+	private void CreateEmployee()
+	{
+		_navigationManager.NavigateTo("/create-employee");
+	}
+
+	private async void EditEmployee(Employee employee)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Edit", ResourceType.Employee);
+		if (hasPermission)
+		{
+			_navigationManager.NavigateTo($"/edit-employee/{employee.Id}");
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+	}
+
+	private async void Delete(Employee employee)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Delete", ResourceType.Employee);
+		if (hasPermission)
+		{
+			if (employee != null)
+			{
+				_context.Employees.Remove(employee);
+				await _context.SaveChangesAsync();
+				_navigationManager.NavigateTo("/employees");
+			}
+			else
+			{
+				_navigationManager.NavigateTo("/Error");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+	}
+}

@@ -1,0 +1,168 @@
+﻿@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@inject IUserService _userService
+@inject IRolePermissionService _rolePermissionService
+@inject IUserPermissionService _userPermissionService
+@page "/user-permission/{Id}"
+
+@attribute [Authorize]
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/users" Text="Users" />
+		<RadzenBreadCrumbItem Text="User permissions" />
+	</RadzenBreadCrumb>
+</div>
+
+
+<AuthorizeView Policy="CanViewUserPermissionsUserPolicy">
+	<Authorized>
+		<h3 class="mb-3">Managing Permissions for - @user.UserName</h3>
+		@if (allPermissions.Any())
+		{
+			@foreach (var resource in Enum.GetValues<ResourceType>())
+			{
+				<div>
+					<label>
+						@* <input type="checkbox" class="parent-checkbox" onchange="toggleNested(this)"> *@
+						@resource.ToString()
+					</label>
+					<!-- Nested Children -->
+					@foreach (var item in CheckboxItems)
+					{
+						if (item.Permission.Resource == resource)
+						{
+							<div class="nested">
+								<label>
+									<input type="checkbox" disabled="@item.IsDisabled" checked="@item.IsChecked"
+										   @onchange="() => OnCheckboxChanged(item)" class="child-checkbox">
+									@item.Permission.Name
+								</label>
+							</div>
+						}
+					}
+				</div>
+				<br />
+			}
+		}
+		else
+		{
+			<p><em>Loading...</em></p>
+		}
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+@code {
+
+	[Parameter]
+	public string? Id { get; set; }
+
+	private string userName;
+	private ApplicationUser userVisitor;
+
+	private ApplicationUser user = new ApplicationUser();
+	private List<Permission> allPermissions = new List<Permission>();
+	private List<CheckboxItem> CheckboxItems = new List<CheckboxItem>();
+
+	private class CheckboxItem
+	{
+		public Permission Permission { get; set; }
+		public bool IsChecked { get; set; }
+		public bool IsDisabled { get; set; }
+	}
+
+	protected override async Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		userVisitor = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(userVisitor, "ViewUserPermissions", ResourceType.User);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+		user = await _userService.GetUserByIdAsync(Id);
+		allPermissions = await _rolePermissionService.GetAllPermissionAsync();
+
+		foreach (var permission in allPermissions)
+		{
+			var checkboxItem = new CheckboxItem
+				{
+					Permission = permission,
+					IsChecked = await _userPermissionService.HasPermissionAsync(user, permission),
+					IsDisabled = await _userPermissionService.UserRolesHasPermissionAsync(user, permission)
+				};
+
+			CheckboxItems.Add(checkboxItem);
+		}
+	}
+
+	private async void OnCheckboxChanged(CheckboxItem item)
+	{
+		var userHasPermission = await _userPermissionService.UserHasPermissionAsync(user, item.Permission);
+		if (!userHasPermission)
+		{
+			await AssignPermissionToUser(user, item.Permission);
+		}
+		else
+		{
+			await RemovePermissionFromUser(user, item.Permission);
+		}
+	}
+
+	private async Task AssignPermissionToUser(ApplicationUser user, Permission permission)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(userVisitor, "AddPermissionToUser", ResourceType.User);
+		if (hasPermission)
+		{
+			var result = await _userPermissionService.AssignPermissionToUserAsync(user, permission);
+			if (result)
+			{
+				_navigationManager.NavigateTo($"/user-permission/{user.Id}", true);
+			}
+			else
+			{
+				_navigationManager.NavigateTo("/Error");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+
+	}
+
+	private async Task RemovePermissionFromUser(ApplicationUser user, Permission permission)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(userVisitor, "RemovePermissionFromUser", ResourceType.User);
+		if (hasPermission)
+		{
+			var result = await _userPermissionService.RemovePermissionFromUserAsync(user, permission);
+			if (result)
+			{
+				_navigationManager.NavigateTo($"/user-permission/{user.Id}", true);
+			}
+			else
+			{
+				_navigationManager.NavigateTo("/Error");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+	}
+}

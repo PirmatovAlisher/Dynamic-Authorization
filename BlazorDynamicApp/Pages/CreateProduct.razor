@@ -1,0 +1,51 @@
+﻿@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@attribute [Authorize]
+
+@page "/create-product"
+
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/products" Text="Products" />
+		<RadzenBreadCrumbItem Path="/create-product" Text="Create product" />
+	</RadzenBreadCrumb>
+</div>
+
+
+
+<AuthorizeView Policy="CanCreateProductPolicy">
+	<Authorized>
+		<div class="alert alert-success">
+			<h3>Create Product</h3>
+		</div>
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+@code {
+	private string userName;
+	private ApplicationUser user;
+
+	protected async override Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Create", ResourceType.Product);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+	}
+}

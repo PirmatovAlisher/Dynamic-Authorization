@@ -1,0 +1,45 @@
+﻿@inherits LayoutComponentBase
+@attribute [Authorize]
+<PageTitle>BlazorDynamicApp</PageTitle>
+
+<AuthorizeView>
+	<Authorized>
+
+	</Authorized>
+</AuthorizeView>
+
+<div class="page">
+	<AuthorizeView>
+		<Authorized>
+			<div class="sidebar">
+				<NavMenu />
+			</div>
+		</Authorized>
+	</AuthorizeView>
+
+
+	<main>
+		<div class="top-row px-4">
+			<LoginDisplay />
+		</div>
+		<AuthorizeView>
+			<Authorized>
+				<article class="content px-4">
+					@Body
+				</article>
+			</Authorized>
+			<NotAuthorized>
+				<div class="container pt-3">
+					<div class="alert alert-info">
+						<a href="/Identity/Account/Login">
+							<h3>Login first</h3>
+						</a>
+					</div>
+
+				</div>
+			</NotAuthorized>
+		</AuthorizeView>
+
+
+	</main>
+</div>

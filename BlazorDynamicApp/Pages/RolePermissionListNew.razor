@@ -1,0 +1,121 @@
+﻿@inject IRoleService _roleService
+@inject IRolePermissionService _rolePermissionService
+@inject NavigationManager _navigationManager
+@attribute [Authorize]
+
+@* @page "/role-permissions/{Id}" *@
+
+<h3>New</h3>
+
+
+<AuthorizeView Roles="SuperAdmin, Admin">
+	<Authorized>
+		<h3>Managing Permissions for - @role.Name</h3>
+
+		@if (allPermissions.Any())
+		{
+			//Radzen
+
+			@* <RadzenTree AllowCheckBoxes="true" @bind-CheckedValues=@CheckedValues Style="width: 100%; height: 300px" Data=@allPermissions
+						ItemRender="@TreeItemRender">
+				<RadzenTreeLevel TextProperty="@nameof(Category.CategoryName)" ChildrenProperty="Products" />
+				<RadzenTreeLevel TextProperty="@nameof(Product.ProductName)" HasChildren=@(product => false) />
+			</RadzenTree> *@
+
+
+			//Test
+			foreach (var resource in Enum.GetValues<ResourceType>())
+			{
+				<div>
+					<label>
+						<input type="checkbox" class="parent-checkbox" onchange="toggleNested(this)">
+						@resource.ToString()
+					</label>
+					<!-- Nested Children -->
+					@foreach (var item in CheckboxItems)
+					{
+						if (item.Permission.Resource == resource)
+						{
+							<div class="nested">
+								<label>
+									<input type="checkbox" checked="@item.IsChecked" class="child-checkbox" onchange="updateParent(this)">
+									@item.Permission.Name
+								</label>
+							</div>
+						}
+					}
+				</div>
+
+			}
+
+
+			//Origen
+			<div class="list-group">
+				@foreach (var item in CheckboxItems)
+				{
+					<table>
+						<tr>
+							<label class="list-group-item border-0">
+								<input class="me-1" type="checkbox" disabled="@IsCheckboxDisabled(item)"
+									   checked="@item.IsChecked" @onchange="() => OnCheckboxChanged(item)">
+								@item.Permission.Resource.ToString() => @item.Permission.Name
+							</label>
+						</tr>
+					</table>
+
+				}
+			</div>
+		}
+		else
+		{
+			<p><em>Loading...</em></p>
+		}
+	</Authorized>
+	<NotAuthorized>
+		<h3>Access Denied</h3>
+		<p>You don't have permission to see this page</p>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+@code {
+
+	[Parameter]
+	public string Id { get; set; }
+	private ApplicationRole role = new ApplicationRole();
+	private List<Permission> allPermissions = new List<Permission>();
+	private List<CheckboxItem> CheckboxItems = new List<CheckboxItem>();
+
+	private class CheckboxItem
+	{
+		public Permission Permission { get; set; }
+		public bool IsChecked { get; set; }
+	}
+
+	protected override async Task OnInitializedAsync()
+	{
+		role = await _roleService.GetRoleByIdAsync(Id);
+		allPermissions = await _rolePermissionService.GetAllPermissionAsync();
+
+		foreach (var permission in allPermissions)
+		{
+			var checkboxItem = new CheckboxItem
+				{
+					Permission = permission,
+					IsChecked = await _rolePermissionService.RoleHasPermissionAsync(role, permission)
+				};
+			CheckboxItems.Add(checkboxItem);
+		}
+	}
+
+	private async void OnCheckboxChanged(CheckboxItem item)
+	{
+
+	}
+
+	private bool IsCheckboxDisabled(CheckboxItem item)
+	{
+		return false;
+	}
+
+}

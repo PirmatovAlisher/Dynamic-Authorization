@@ -1,0 +1,58 @@
+﻿@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@inject ApplicationDbContext _context
+@attribute [Authorize]
+
+@page "/edit-product/{Id:int}"
+
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/products" Text="Products" />
+		<RadzenBreadCrumbItem Text="Edit product" />
+	</RadzenBreadCrumb>
+</div>
+
+
+
+<AuthorizeView Policy="CanEditProductPolicy">
+	<Authorized>
+		<div class="alert alert-success">
+			<h3>Edit Product - @product.Name</h3>
+		</div>
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+@code {
+	[Parameter]
+	public int Id { get; set; }
+
+	private string userName;
+	private ApplicationUser user;
+	private Product product = new Product();
+
+	protected override async Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Edit", ResourceType.Product);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+		product = await _context.Products.FindAsync(Id);
+	}
+
+}

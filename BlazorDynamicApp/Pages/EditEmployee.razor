@@ -1,0 +1,58 @@
+﻿@inject ApplicationDbContext _context
+@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@attribute [Authorize]
+
+@page "/edit-employee/{Id:int}"
+
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/employees" Text="Employees" />
+		<RadzenBreadCrumbItem Text="Edit employee" />
+	</RadzenBreadCrumb>
+</div>
+
+
+
+<AuthorizeView Policy="CanEditEmployeePolicy">
+	<Authorized>
+		<div class="alert alert-success">
+			<h3>Edit Employee - @employee.Name</h3>
+		</div>
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+@code {
+	[Parameter]
+	public int Id { get; set; }
+
+	private string userName;
+	private ApplicationUser user;
+
+	private Employee employee = new Employee();
+
+	protected override async Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+		employee = await _context.Employees.FindAsync(Id);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Edit", ResourceType.Employee);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+	}
+
+}

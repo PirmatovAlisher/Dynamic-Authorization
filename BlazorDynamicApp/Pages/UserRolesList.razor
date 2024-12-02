@@ -1,0 +1,161 @@
+﻿@inject IUserRoleService _userRoleService
+@inject IRoleService _roleService
+@inject IUserService _userService
+@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@attribute [Authorize]
+@page "/user-roles/{Id}"
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/users" Text="Users" />
+		<RadzenBreadCrumbItem Text="User roles" />
+	</RadzenBreadCrumb>
+</div>
+
+<AuthorizeView Policy="CanViewUserRolesUserRolePolicy">
+	<Authorized>
+		<h3>Managing Roles for - @user.UserName</h3>
+		@if (allRoles.Count > 0)
+		{
+			<div class="list-group">
+				@foreach (var item in CheckboxItems)
+				{
+					<label class="list-group-item border-0">
+						<input class="me-1" type="checkbox" disabled="@IsCheckboxDisabled(item)"
+							   checked="@item.IsChecked" @onchange="() => OnCheckboxChanged(item)">
+						@item.Role.Name
+					</label>
+				}
+			</div>
+		}
+		else
+		{
+			<p><em>Loading...</em></p>
+		}
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+
+
+
+@code {
+	[Parameter]
+	public string Id { get; set; }
+	private string? userNameVisitor;
+	private ApplicationUser userVisitor = new ApplicationUser();
+
+	ApplicationUser user = new ApplicationUser();
+	List<ApplicationRole> allRoles = new List<ApplicationRole>();
+	private List<CheckboxItem> CheckboxItems = new List<CheckboxItem>();
+
+	protected async override Task OnInitializedAsync()
+	{
+		userNameVisitor = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		userVisitor = await _userManager.FindByNameAsync(userNameVisitor);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(userVisitor, "ViewUserRoles", ResourceType.UserRole);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+
+		user = await _userService.GetUserByIdAsync(Id);
+		allRoles = await _roleService.GetAllRolesAsync();
+
+
+		foreach (var role in allRoles)
+		{
+			var CheckboxItem = new CheckboxItem
+				{
+					Role = role,
+					IsChecked = await _userRoleService.UserInRoleAsync(user, role)
+				};
+			CheckboxItems.Add(CheckboxItem);
+		}
+	}
+
+	private async void OnCheckboxChanged(CheckboxItem item)
+	{
+		var isInRole = await _userRoleService.UserInRoleAsync(user, item.Role);
+		if (!isInRole)
+		{
+			await AssignRoleToUser(user, item.Role);
+		}
+		else
+		{
+			await RemoveRoleFromUser(user, item.Role);
+		}
+	}
+
+
+	private async Task AssignRoleToUser(ApplicationUser user, ApplicationRole role)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(userVisitor, "AddRoleToUser", ResourceType.UserRole);
+		if (hasPermission)
+		{
+			var result = await _userRoleService.AssignRoleToUserAsync(user, role);
+			if (result)
+			{
+				_navigationManager.NavigateTo($"/user-roles/{user.Id}", true);
+			}
+			else
+			{
+				_navigationManager.NavigateTo("/Error");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+	}
+
+	private async Task RemoveRoleFromUser(ApplicationUser user, ApplicationRole role)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(userVisitor, "RemoveRoleFromUser", ResourceType.UserRole);
+		if (hasPermission)
+		{
+			var result = await _userRoleService.RemoveRoleFromUserAsync(user, role);
+			if (result)
+			{
+				_navigationManager.NavigateTo($"/user-roles/{user.Id}", true);
+			}
+			else
+			{
+				_navigationManager.NavigateTo("/Error");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+	}
+
+	private bool IsCheckboxDisabled(CheckboxItem item)
+	{
+		if (item.Role.Name == "Member")
+		{
+			return true;
+		}
+		return false;
+	}
+
+	// Define a class to represent the checkbox item
+	private class CheckboxItem
+	{
+		public ApplicationRole Role { get; set; }
+		public bool IsChecked { get; set; }
+	}
+}

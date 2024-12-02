@@ -1,0 +1,90 @@
+﻿@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@inject IRoleService _roleService
+@attribute [Authorize]
+
+@page "/edit-role/{Id}"
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/roles" Text="Roles" />
+		<RadzenBreadCrumbItem Text="Edit Role" />
+	</RadzenBreadCrumb>
+</div>
+<AuthorizeView Context="authContext" Policy="CanEditRolePolicy">
+	<Authorized>
+		<h3>Edit Role</h3>
+
+		<div class="rz-p-0 rz-p-md-12">
+			<RadzenRow class="rz-text-align-center " Gap="1rem">
+				<RadzenColumn Size="6" Offset="3" class="rz-background-color-info-lighter rz-color-on-info-lighter rz-p-5">
+					<EditForm Model="role" OnSubmit="@OnSubmit">
+						<RadzenStack Orientation="Orientation.Vertical" Gap="1rem" class="rz-p-sm-12">
+							<DataAnnotationsValidator />
+							<input type="hidden" @bind="role.Id" />
+							<RadzenFormField Text="Role Name" AllowFloatingLabel="true">
+								<ChildContent>
+									<RadzenTextBox Name="Name" @bind-Value=role.Name Placeholder="Role Name" />
+								</ChildContent>
+							</RadzenFormField>
+
+							<RadzenButton ButtonType="ButtonType.Submit" Text="Submit"></RadzenButton>
+							<RadzenLink Path="/roles" Text="Cancel" />
+						</RadzenStack>
+					</EditForm>
+				</RadzenColumn>
+			</RadzenRow>
+		</div>
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+
+@code {
+
+	[Parameter]
+	public string? Id { get; set; }
+
+	private string userName;
+	private ApplicationUser user;
+
+	ApplicationRole role = new ApplicationRole();
+
+	protected override async Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Edit", ResourceType.Role);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+		role = await _roleService.GetRoleByIdAsync(Id);
+	}
+
+	private async Task OnSubmit()
+	{
+		var result = await _roleService.UpdateRoleAsync(role);
+
+		if (result)
+		{
+			_navigationManager.NavigateTo("/roles");
+		}
+		else
+		{
+			_navigationManager.NavigateTo("/Error");
+		}
+	}
+}

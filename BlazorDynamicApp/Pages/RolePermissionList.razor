@@ -1,0 +1,198 @@
+﻿@inject IRoleService _roleService
+@inject IRolePermissionService _rolePermissionService
+@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@attribute [Authorize]
+
+@page "/role-permissions/{Id}"
+
+<RadzenBreadCrumb>
+	<RadzenBreadCrumbItem Path="/" Text="Index" />
+	<RadzenBreadCrumbItem Path="/roles" Text="Roles" />
+	<RadzenBreadCrumbItem Text="Role Permissions" />
+</RadzenBreadCrumb>
+<br />
+<br />
+
+<AuthorizeView Policy="CanViewRolePermissionsRolePolicy">
+	<Authorized>
+		<h3 class="mb-3">Managing Permissions for - @role.Name</h3>
+
+		@if (allPermissions.Any())
+		{
+			//Test
+			foreach (var resource in Enum.GetValues<ResourceType>())
+			{
+				<div>
+					<label>
+						@* <input type="checkbox" class="parent-checkbox" onchange="toggleNested(this)"> *@
+						@resource.ToString()
+					</label>
+					<!-- Nested Children -->
+					@foreach (var item in CheckboxItems)
+					{
+						if (item.Permission.Resource == resource)
+						{
+							<div class="nested">
+								<label>
+									<input type="checkbox" checked="@item.IsChecked" @onchange="() => OnCheckboxChanged(item)"
+										   class="child-checkbox">
+									@item.Permission.Name
+								</label>
+							</div>
+						}
+					}
+				</div>
+				<br />
+			}
+
+
+			//Original
+			@* <div class="list-group">
+		@foreach (var item in CheckboxItems)
+		{
+		<table>
+		<tr>
+		<label class="list-group-item border-0">
+		<input class="me-1" type="checkbox" disabled="@IsCheckboxDisabled(item)"
+		checked="@item.IsChecked" @onchange="() => OnCheckboxChanged(item)">
+		@item.Permission.Resource.ToString() => @item.Permission.Name
+		</label>
+		</tr>
+		</table>
+
+		}
+		</div> *@
+		}
+		else
+		{
+			<p><em>Loading...</em></p>
+		}
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+@code {
+
+	[Parameter]
+	public string Id { get; set; }
+	private string? userName;
+	private ApplicationUser user = new ApplicationUser();
+
+	private ApplicationRole role = new ApplicationRole();
+	private List<Permission> allPermissions = new List<Permission>();
+	private List<CheckboxItem> CheckboxItems = new List<CheckboxItem>();
+
+	private class CheckboxItem
+	{
+		public Permission Permission { get; set; }
+		public bool IsChecked { get; set; }
+	}
+
+	protected override async Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "ViewRolePermissions", ResourceType.Role);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+
+		role = await _roleService.GetRoleByIdAsync(Id);
+		allPermissions = await _rolePermissionService.GetAllPermissionAsync();
+
+		foreach (var permission in allPermissions)
+		{
+			var checkboxItem = new CheckboxItem
+				{
+					Permission = permission,
+					IsChecked = await _rolePermissionService.RoleHasPermissionAsync(role, permission)
+				};
+			CheckboxItems.Add(checkboxItem);
+		}
+	}
+
+	private async void OnCheckboxChanged(CheckboxItem item)
+	{
+		var roleHasPermission = await _rolePermissionService.RoleHasPermissionAsync(role, item.Permission);
+		if (!roleHasPermission)
+		{
+			await AssignPermissionToRole(role, item.Permission);
+		}
+		else
+		{
+			await RemovePermissionFromRole(role, item.Permission);
+		}
+	}
+
+	private bool IsCheckboxDisabled(CheckboxItem item)
+	{
+		if (item.Permission.Name == "View" &&
+		item.Permission.Resource == ResourceType.Employee && item.Permission.Resource == ResourceType.Product)
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+
+	}
+
+	private async Task AssignPermissionToRole(ApplicationRole role, Permission permission)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "AddPermissionToRole", ResourceType.Role);
+		if (hasPermission)
+		{
+			var result = await _rolePermissionService.AddPermissionToRoleAsync(role, permission);
+			if (result)
+			{
+				_navigationManager.NavigateTo($"/role-permissions/{role.Id}", true);
+			}
+			else
+			{
+				_navigationManager.NavigateTo("/Error");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+	}
+
+	private async Task RemovePermissionFromRole(ApplicationRole role, Permission permission)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "RemovePermissionFromRole", ResourceType.Role);
+
+		if (hasPermission)
+		{
+			var result = await _rolePermissionService.RemovePermissionFromRoleAsync(role, permission);
+
+			if (result)
+			{
+				_navigationManager.NavigateTo($"/role-permissions/{role.Id}", true);
+			}
+			else
+			{
+				_navigationManager.NavigateTo("/Error");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+	}
+
+}

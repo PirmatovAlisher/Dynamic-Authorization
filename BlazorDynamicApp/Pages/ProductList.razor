@@ -1,0 +1,128 @@
+﻿@inject ApplicationDbContext _context
+@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@page "/products"
+
+@attribute [Authorize]
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/products" Text="Products" />
+	</RadzenBreadCrumb>
+</div>
+
+<AuthorizeView Policy="CanCreateProductPolicy">
+	<RadzenButton Click=@(args => CreateProduct()) Icon="add_circle" ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Text="Add"
+				  Shade="Shade.Light" />
+</AuthorizeView>
+
+<AuthorizeView Policy="CanViewProductPolicy">
+	<Authorized>
+		@if (products == null)
+		{
+			<p><em>Loading...</em></p>
+		}
+		else
+		{
+			<RadzenText TextStyle="TextStyle.H6" TagName="TagName.H2" class="rz-my-6">Products </RadzenText>
+			<RadzenDataGrid AllowVirtualization="true" @ref="grid" Data=@products GridLines="DataGridGridLines.Both"
+							AllowFiltering="false" AllowPaging="true" AllowSorting="true" ColumnWidth="160px">
+				<Columns>
+					<RadzenDataGridColumn Property="Id" Title="Id">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Title="Product Name" Property="Name">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Title="Description" Property="Description">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Title="Price" Property="Price">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Width="160px" Title="Actions">
+						<Template Context="grid">
+
+							<RadzenButton ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat"
+										  Shade="Shade.Light" Icon="edit" class="rz-m-1" Click=@(() => EditProduct(grid)) Text="Update" />
+
+							<RadzenButton ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat"
+										  Shade="Shade.Light" Icon="delete" class="rz-m-1" Click=@(() => Delete(grid)) Text="Delete" />
+
+						</Template>
+					</RadzenDataGridColumn>
+				</Columns>
+			</RadzenDataGrid>
+		}
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+
+@code {
+
+	RadzenDataGrid<Product> grid;
+	IEnumerable<Product> products;
+	private string userName;
+	private ApplicationUser user;
+
+	protected override async Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "View", ResourceType.Product);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+		products = await _context.Products.ToListAsync();
+
+	}
+
+	private void CreateProduct()
+	{
+		_navigationManager.NavigateTo($"/create-product");
+	}
+
+	private async void EditProduct(Product product)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Edit", ResourceType.Product);
+		if (hasPermission)
+		{
+			_navigationManager.NavigateTo($"/edit-product/{product.Id}");
+		}
+		else
+		{
+			_navigationManager.NavigateTo("/access-denied");
+		}
+
+	}
+
+	private async void Delete(Product product)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Delete", ResourceType.Product);
+		if (hasPermission)
+		{
+			if (product != null)
+			{
+				_context.Products.Remove(product);
+				await _context.SaveChangesAsync();
+				_navigationManager.NavigateTo($"/products");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+	}
+
+}

@@ -1,0 +1,156 @@
+﻿@inject IRoleService _roleService
+@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@attribute [Authorize]
+
+@page "/roles"
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/roles" Text="Roles" />
+	</RadzenBreadCrumb>
+</div>
+
+<AuthorizeView Policy="CanCreateRolePolicy">
+	<RadzenButton Click=@(args => AddRole()) Icon="add_circle" ButtonStyle="ButtonStyle.Secondary">Add role</RadzenButton>
+</AuthorizeView>
+
+
+<AuthorizeView Policy="CanViewRolePolicy">
+	<Authorized>
+		@if (roles.Count > 0)
+		{
+			<RadzenText TextStyle="TextStyle.H6" TagName="TagName.H2" class="rz-my-6">Roles </RadzenText>
+			<RadzenDataGrid AllowVirtualization="true" @ref="grid" Data=@roles class="rz-w-25" GridLines="DataGridGridLines.Both"
+							AllowFiltering="false" AllowPaging="true" AllowSorting="true" ColumnWidth="230px">
+				<Columns>
+					@* <RadzenDataGridColumn Property="Id" Title="Role Id">
+				</RadzenDataGridColumn> *@
+					<RadzenDataGridColumn Title="Role Name" Property="Name">
+					</RadzenDataGridColumn>
+					<RadzenDataGridColumn Width="160px" Title="Actions">
+						<Template Context="grid">
+							<RadzenSplitButton Click=@(args => OnClick(args, grid)) AlwaysOpenPopup=true Text="Actions" Shade="Shade.Light">
+								<ChildContent>
+									<RadzenSplitButtonItem Text="Permissions" Value="1" Icon="list" IconColor="#14A44D"
+														   onmouseover="this.style.backgroundColor='#14A44D'; this.style.color='white';"
+														   onmouseout="this.style.backgroundColor='white'; this.style.color='black';" />
+									<RadzenSplitButtonItem Text="Edit" Value="2" Icon="edit" IconColor="#54B4D3"
+														   onmouseover="this.style.backgroundColor='#54B4D3'; this.style.color='white';"
+														   onmouseout="this.style.backgroundColor='white'; this.style.color='black';" />
+									<RadzenSplitButtonItem Text="Delete" Value="3" Icon="delete" IconColor="#DC4C64"
+														   onmouseover="this.style.backgroundColor='#DC4C64'; this.style.color='white';"
+														   onmouseout="this.style.backgroundColor='white'; this.style.color='black';" />
+								</ChildContent>
+							</RadzenSplitButton>
+						</Template>
+					</RadzenDataGridColumn>
+				</Columns>
+			</RadzenDataGrid>
+		}
+		else
+		{
+			<p><em>Loading...</em></p>
+		}
+	</Authorized>
+
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+@code {
+	private string userName;
+	private ApplicationUser user;
+
+	RadzenDataGrid<ApplicationRole> grid;
+	List<ApplicationRole> roles = new List<ApplicationRole>();
+
+	protected override async Task OnInitializedAsync()
+	{
+		userName = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		user = await _userManager.FindByNameAsync(userName);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "View", ResourceType.Role);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+		roles = await _roleService.GetAllRolesAsync();
+	}
+
+	private async void ManageRolePermissions(string Id)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "ViewRolePermissions", ResourceType.Role);
+		if (hasPermission)
+		{
+			_navigationManager.NavigateTo($"/role-permissions/{Id}");
+		}
+		else
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+	}
+	private void AddRole()
+	{
+		_navigationManager.NavigateTo("/create-role");
+	}
+	private async void EditRole(ApplicationRole role)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Edit", ResourceType.Role);
+		if (hasPermission)
+		{
+			_navigationManager.NavigateTo($"/edit-role/{role.Id}");
+		}
+		else
+		{
+			_navigationManager.NavigateTo("/access-denied");
+		}
+
+	}
+
+	private async Task DeleteRole(ApplicationRole role)
+	{
+		var hasPermission = await _permissionService.HasPermissionAsync(user, "Delete", ResourceType.Role);
+		if (hasPermission)
+		{
+			var result = await _roleService.DeleteRoleAsync(role);
+			if (result)
+			{
+				_navigationManager.NavigateTo("/roles", true);
+			}
+			else
+			{
+				_navigationManager.NavigateTo("/Error");
+			}
+		}
+		else
+		{
+			_navigationManager.NavigateTo("/access-denied");
+		}
+
+	}
+
+	private async Task OnClick(RadzenSplitButtonItem item, ApplicationRole role)
+	{
+		if (item.Value == "1")
+		{
+			ManageRolePermissions(role.Id);
+		}
+		else if (item.Value == "2")
+		{
+			EditRole(role);
+		}
+		else if (item.Value == "3")
+		{
+			await DeleteRole(role);
+		}
+	}
+}

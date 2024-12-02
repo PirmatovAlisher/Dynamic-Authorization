@@ -1,0 +1,55 @@
+﻿@inject NavigationManager _navigationManager
+@inject UserManager<ApplicationUser> _userManager
+@inject IHttpContextAccessor IHttpContextAccessor
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IPermissionService _permissionService
+@inject IUserService _userService
+@attribute [Authorize]
+@page "/edit-user/{Id}"
+
+<div class="rz-m-12">
+	<RadzenBreadCrumb>
+		<RadzenBreadCrumbItem Path="/" Text="Index" />
+		<RadzenBreadCrumbItem Path="/users" Text="Users" />
+		<RadzenBreadCrumbItem Text="Edit user" />
+	</RadzenBreadCrumb>
+</div>
+
+<AuthorizeView Policy="CanEditUserPolicy">
+	<Authorized>
+		<div class="alert alert-success">
+			<h3>Edit User - @user.UserName</h3>
+		</div>
+	</Authorized>
+	<NotAuthorized>
+		<div class="alert alert-danger">
+			<h3>Access Denied</h3>
+			<p>You don't have permission to see this page</p>
+		</div>
+	</NotAuthorized>
+</AuthorizeView>
+
+
+@code {
+	[Parameter]
+	public string? Id { get; set; }
+	private ApplicationUser user { get; set; } = new ApplicationUser();
+
+	private string userNameVisitor;
+	private ApplicationUser userVisitor;
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		userNameVisitor = IHttpContextAccessor.HttpContext.User.Identity.Name;
+		userVisitor = await _userManager.FindByNameAsync(userNameVisitor);
+
+		var hasPermission = await _permissionService.HasPermissionAsync(userVisitor, "Edit", ResourceType.User);
+		if (!hasPermission)
+		{
+			_navigationManager.NavigateTo($"/access-denied");
+		}
+
+		user = await _userService.GetUserByIdAsync(Id);
+	}
+}
